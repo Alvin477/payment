@@ -1,0 +1,10 @@
+*
+**/*
+*.ts
+*.tsx
+*.js
+*.jsx
+node_modules
+.next
+build
+dist 

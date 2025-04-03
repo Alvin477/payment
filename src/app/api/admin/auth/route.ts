@@ -1,27 +1,32 @@
 import { NextResponse } from 'next/server';
-import dbConnect from '@/lib/db';
-import { Admin } from '@/models/admin';
-import { encrypt } from '@/lib/crypto';
+// Remove unused encrypt import if not needed
+// import { encrypt } from '@/lib/crypto';
 
 export async function POST(request: Request) {
-  try {
-    const { email, password } = await request.json();
-    
-    await dbConnect();
-    const admin = await Admin.findOne({ email });
-    
-    if (!admin) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
-    }
+    try {
+        const body = await request.json();
+        
+        if (!body.email || !body.password) {
+            return NextResponse.json(
+                { error: 'Missing credentials' },
+                { status: 400 }
+            );
+        }
 
-    // Compare with decrypted password (handled by mongoose getter)
-    if (admin.password !== password) {
-      return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
-    }
+        // Add your authentication logic here
+        if (body.email === process.env.ADMIN_EMAIL && 
+            body.password === process.env.ADMIN_PASSWORD) {
+            return NextResponse.json({ status: 'success' });
+        }
 
-    return NextResponse.json({ message: 'Login successful' });
-  } catch (error) {
-    console.error('Login error:', error);
-    return NextResponse.json({ error: 'Login failed' }, { status: 500 });
-  }
+        return NextResponse.json(
+            { error: 'Invalid credentials' },
+            { status: 401 }
+        );
+    } catch (error) {
+        return NextResponse.json(
+            { error: 'Authentication failed' },
+            { status: 500 }
+        );
+    }
 } 
