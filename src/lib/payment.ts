@@ -173,9 +173,6 @@ export class PaymentService {
                 }
               );
 
-              // Only send callback after TRX is sent successfully
-              await this.callbackService.sendPaymentCallback(payment, 'CONFIRMED', receivedAmount);
-
               // After sending TRX, wait a bit and then transfer to main wallet
               await new Promise(resolve => setTimeout(resolve, 3000));
               try {
@@ -276,6 +273,14 @@ export class PaymentService {
               }
             }
           );
+
+          // Send callback after successful transfer
+          try {
+            await this.callbackService.sendPaymentCallback(payment, 'CONFIRMED', amount);
+            console.log('Successfully sent callback to main system after transfer');
+          } catch (callbackError) {
+            console.error('Failed to send callback after transfer:', callbackError);
+          }
 
           // Wait for 5 seconds to ensure USDT transfer is fully confirmed
           console.log('Waiting 5 seconds for USDT transfer confirmation...');
