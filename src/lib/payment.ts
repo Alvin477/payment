@@ -4,10 +4,12 @@ import { PaymentRequest, PaymentSession, PaymentStatus, Transaction, Transaction
 import dbConnect from './db';
 import { Payment } from '@/models/payment';
 import { TrxService } from './trx';
+import { CallbackService } from './callback';
 
 export class PaymentService {
   private tronWeb: TronWeb;
   private trxService: TrxService;
+  private callbackService: CallbackService;
   
   constructor() {
     this.tronWeb = new TronWeb({
@@ -15,6 +17,7 @@ export class PaymentService {
       headers: { "TRON-PRO-API-KEY": TRON_CONFIG.API_KEY }
     });
     this.trxService = new TrxService();
+    this.callbackService = new CallbackService();
     
     // Set default address to fee wallet
     if (process.env.FEE_WALLET_ADDRESS) {
@@ -149,6 +152,9 @@ export class PaymentService {
             
           // If payment is confirmed and TRX hasn't been sent for fees, send it
           if (status === PaymentStatus.CONFIRMED && !payment.trxSent) {
+            // Send callback first
+            await this.callbackService.sendPaymentCallback(payment, 'CONFIRMED', receivedAmount);
+            
             try {
               const txId = await this.trxService.sendTrxForFees(address, receivedAmount);
               console.log('Sent TRX for fees, txId:', txId);
