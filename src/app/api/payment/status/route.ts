@@ -5,8 +5,9 @@ import { Transaction, TransactionStatus } from '@/types/payment';
 const paymentService = new PaymentService();
 
 export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  
   try {
-    const { searchParams } = new URL(request.url);
     const address = searchParams.get('address');
     const expectedAmount = searchParams.get('amount');
 
@@ -17,14 +18,16 @@ export async function GET(request: Request) {
       );
     }
 
-    // Add timeout to the payment check
+    const parsedAmount = parseFloat(expectedAmount);
+
+    // Shorter timeout for Vercel
     const timeoutPromise = new Promise<Transaction | null>((_, reject) => {
-      setTimeout(() => reject(new Error('Payment check timed out')), 25000);
+      setTimeout(() => reject(new Error('Payment check timed out')), 8000); // 8 second timeout
     });
 
     const transactionPromise = paymentService.checkPayment(
       address,
-      parseFloat(expectedAmount)
+      parsedAmount
     );
 
     const transaction = await Promise.race([transactionPromise, timeoutPromise]);
@@ -34,10 +37,10 @@ export async function GET(request: Request) {
       return NextResponse.json({
         status: TransactionStatus.PENDING,
         message: 'No payment received yet',
-        expectedAmount: parseFloat(expectedAmount),
+        expectedAmount: parsedAmount,
         receivedAmount: 0,
-        remainingAmount: parseFloat(expectedAmount)
-      });
+        remainingAmount: parsedAmount
+      }, { status: 200 }); // Ensure we return 200 for pending
     }
 
     // Return transaction details if found
@@ -51,21 +54,25 @@ export async function GET(request: Request) {
         : transaction.status === TransactionStatus.CONFIRMED
         ? 'Payment completed successfully'
         : 'Payment pending'
-    });
+    }, { status: 200 }); // Always return 200 for valid responses
   } catch (error) {
     console.error('Payment status check failed:', error);
     
     // Return a more informative error response
     const errorMessage = error instanceof Error ? error.message : 'Failed to check payment status';
-    const statusCode = errorMessage.includes('timed out') ? 504 : 500;
+    const parsedAmount = parseFloat(searchParams.get('amount') || '0');
     
+    // Return 200 with error status instead of 504/500 to prevent Vercel from showing error page
     return NextResponse.json(
       { 
-        error: errorMessage,
         status: 'ERROR',
-        message: 'Payment status check failed, please try again'
+        error: errorMessage,
+        message: 'Payment check will retry automatically...',
+        expectedAmount: parsedAmount,
+        receivedAmount: 0,
+        remainingAmount: parsedAmount
       },
-      { status: statusCode }
+      { status: 200 }
     );
   }
 } 
