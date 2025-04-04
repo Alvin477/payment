@@ -37,7 +37,7 @@ export default function PaymentPage() {
         
         if (data.status === 'CONFIRMED') {
           setTimeout(() => {
-            window.location.href = 'https://test2.bitorbs.com/user/dashboard';
+            window.location.href = 'https://bitorbs.com/user/dashboard';
           }, 8000);
         }
       } catch (error) {
