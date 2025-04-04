@@ -27,6 +27,29 @@ interface PaginatedResponse {
   };
 }
 
+const StatusBadge = ({ status }: { status: PaymentStatus }) => {
+  const getStatusColor = (status: PaymentStatus) => {
+    switch (status) {
+      case 'CONFIRMED':
+        return 'bg-emerald-500/10 text-emerald-400';
+      case 'PARTIAL':
+        return 'bg-yellow-500/10 text-yellow-400';
+      case 'PENDING':
+        return 'bg-blue-500/10 text-blue-400';
+      case 'EXPIRED':
+        return 'bg-red-500/10 text-red-400';
+      default:
+        return 'bg-gray-500/10 text-gray-400';
+    }
+  };
+
+  return (
+    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
+      {status}
+    </span>
+  );
+};
+
 export default function AdminPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -179,21 +202,6 @@ export default function AdminPage() {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'CONFIRMED':
-        return 'bg-emerald-500/10 text-emerald-500';
-      case 'PARTIAL':
-        return 'bg-yellow-500/10 text-yellow-500';
-      case 'PENDING':
-        return 'bg-blue-500/10 text-blue-500';
-      case 'TRANSFERRED':
-        return 'bg-purple-500/10 text-purple-500';
-      default:
-        return 'bg-gray-500/10 text-gray-500';
-    }
-  };
-
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -249,20 +257,20 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 p-8">
+    <div className="min-h-screen bg-gray-900 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
-          <div className="flex items-center space-x-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <h1 className="text-xl md:text-2xl font-bold text-white">Admin Dashboard</h1>
+          <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={fetchPayments}
-              className="px-4 py-2 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+              className="px-3 py-1.5 md:px-4 md:py-2 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors text-sm md:text-base"
             >
               Refresh
             </button>
             <button
               onClick={handleTransferAll}
-              className="px-4 py-2 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
+              className="px-3 py-1.5 md:px-4 md:py-2 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors text-sm md:text-base"
             >
               Transfer All
             </button>
@@ -272,7 +280,7 @@ export default function AdminPage() {
                 setIsLoggedIn(false);
                 setPayments([]);
               }}
-              className="px-4 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+              className="px-3 py-1.5 md:px-4 md:py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors text-sm md:text-base"
             >
               Logout
             </button>
@@ -281,11 +289,11 @@ export default function AdminPage() {
 
         <div className="bg-gray-800 rounded-xl shadow-xl border border-gray-700 overflow-hidden">
           <div className="p-4 border-b border-gray-700 bg-gray-800/50">
-            <div className="flex items-center space-x-4">
+            <div className="flex flex-col md:flex-row gap-3">
               <select
                 value={filter.status}
                 onChange={(e) => handleFilterChange('status', e.target.value)}
-                className="bg-gray-700 text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full md:w-auto bg-gray-700 text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="ALL">All Status</option>
                 <option value="PENDING">Pending</option>
@@ -296,7 +304,7 @@ export default function AdminPage() {
               <select
                 value={filter.transferStatus}
                 onChange={(e) => handleFilterChange('transferStatus', e.target.value)}
-                className="bg-gray-700 text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full md:w-auto bg-gray-700 text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="ALL">All Transfers</option>
                 <option value="PENDING_TRANSFER">Pending Transfer</option>
@@ -304,132 +312,125 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="p-6">
-            {error && (
-              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-500">
-                {error}
-                <button
-                  onClick={() => {
-                    setError(null);
-                    fetchPayments();
-                  }}
-                  className="ml-2 underline hover:no-underline"
-                >
-                  Try again
-                </button>
-              </div>
-            )}
-            {loading ? (
-              <div className="flex items-center justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-              </div>
-            ) : payments.length === 0 ? (
-              <div className="text-center py-12 text-gray-400">
-                No payments found
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-700">
-                  <thead>
-                    <tr>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Order ID</th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Address</th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Amount</th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Received</th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-4 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gray-800/50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Order ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider hidden md:table-cell">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Amount</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider hidden lg:table-cell">Address</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700">
+                {payments.map((payment) => (
+                  <React.Fragment key={payment._id}>
+                    <tr className="hover:bg-gray-800/30">
+                      <td className="px-4 py-4 whitespace-nowrap text-sm">
+                        <span className="font-mono text-gray-300">{payment.orderId}</span>
+                        <span className="md:hidden mt-1 block">
+                          <StatusBadge status={payment.status} />
+                        </span>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap hidden md:table-cell">
+                        <StatusBadge status={payment.status} />
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm">
+                        <div className="text-gray-300">{payment.amount} USDT</div>
+                        {payment.receivedAmount > 0 && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            Received: {payment.receivedAmount} USDT
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm hidden lg:table-cell">
+                        <div className="font-mono text-gray-400 truncate max-w-[200px]">
+                          {payment.address}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm">
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => setExpandedRow(expandedRow === payment._id ? null : payment._id)}
+                            className="px-2 py-1 rounded bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors text-xs"
+                          >
+                            {expandedRow === payment._id ? 'Hide' : 'View'}
+                          </button>
+                          {payment.status === 'CONFIRMED' && !payment.transferredToMain && payment.trxSent && (
+                            <button
+                              onClick={() => handleTransferToMain(payment.address)}
+                              className="px-2 py-1 rounded bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors text-xs"
+                            >
+                              Transfer
+                            </button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-700">
-                    {payments.map((payment) => (
-                      <React.Fragment key={payment._id}>
-                        <tr 
-                          className="hover:bg-gray-700/50 transition-colors cursor-pointer"
-                          onClick={() => setExpandedRow(expandedRow === payment._id ? null : payment._id)}
-                        >
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{payment.orderId}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300 font-mono">{payment.address}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{payment.amount} USDT</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{payment.receivedAmount} USDT</td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(payment.status)}`}>
-                              {payment.transferredToMain ? 'TRANSFERRED' : payment.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm space-x-3">
-                            {!payment.trxSent && payment.status === 'CONFIRMED' && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSendTrx(payment.address);
-                                }}
-                                className="text-blue-400 hover:text-blue-300 transition-colors font-medium"
-                              >
-                                Send TRX
-                              </button>
-                            )}
-                            {!payment.transferredToMain && payment.status === 'CONFIRMED' && payment.trxSent && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleTransferToMain(payment.address);
-                                }}
-                                className="text-purple-400 hover:text-purple-300 transition-colors font-medium"
-                              >
-                                Transfer to Main
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                        {expandedRow === payment._id && payment.privateKey && (
-                          <tr className="bg-gray-800/50">
-                            <td colSpan={6} className="px-6 py-4">
-                              <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4">
-                                <div className="flex items-center justify-between mb-2">
-                                  <p className="text-sm font-medium text-gray-400">Private Key (Encrypted)</p>
-                                  <button
-                                    onClick={() => copyToClipboard(payment.privateKey!)}
-                                    className="px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors text-sm flex items-center space-x-1"
-                                  >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                      <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
-                                      <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
-                                    </svg>
-                                    <span>Copy</span>
-                                  </button>
-                                </div>
-                                <div className="bg-gray-800 rounded p-3 font-mono text-sm text-gray-300 break-all border border-gray-700">
-                                  {payment.privateKey}
+                    {expandedRow === payment._id && (
+                      <tr className="bg-gray-800/30">
+                        <td colSpan={5} className="px-4 py-4">
+                          <div className="space-y-3">
+                            <div className="lg:hidden">
+                              <div className="text-xs font-medium text-gray-400 mb-1">Address</div>
+                              <div className="font-mono text-gray-300 break-all text-sm">
+                                {payment.address}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="text-xs font-medium text-gray-400 mb-1">Private Key</div>
+                              <div className="font-mono text-gray-300 break-all text-sm">
+                                {payment.privateKey}
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                              <div>
+                                <div className="text-xs font-medium text-gray-400 mb-1">Created</div>
+                                <div className="text-gray-300">
+                                  {new Date(payment.createdAt).toLocaleString()}
                                 </div>
                               </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                              <div>
+                                <div className="text-xs font-medium text-gray-400 mb-1">TRX Sent</div>
+                                <div className="text-gray-300">
+                                  {payment.trxSent ? 'Yes' : 'No'}
+                                </div>
+                              </div>
+                              <div>
+                                <div className="text-xs font-medium text-gray-400 mb-1">Transferred</div>
+                                <div className="text-gray-300">
+                                  {payment.transferredToMain ? 'Yes' : 'No'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           <div className="p-4 border-t border-gray-700 bg-gray-800/50">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div className="text-sm text-gray-400">
                 Page {currentPage} of {totalPages}
               </div>
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="px-3 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                   Previous
                 </button>
                 <button
                   onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                   disabled={currentPage === totalPages}
-                  className="px-3 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-3 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                 >
                   Next
                 </button>
