@@ -150,14 +150,14 @@ export class PaymentService {
 
           const status = this.getPaymentStatus(transaction);
             
-          // If payment is confirmed and TRX hasn't been sent for fees, send it
-          if (status === PaymentStatus.CONFIRMED && !payment.trxSent) {
-            // Send callback first
-            await this.callbackService.sendPaymentCallback(payment, 'CONFIRMED', receivedAmount);
-            
+          // Only send callback if payment is fully confirmed and amount matches
+          if (status === PaymentStatus.CONFIRMED && receivedAmount >= expectedAmount && !payment.trxSent) {
             try {
+              // Send TRX first
               const txId = await this.trxService.sendTrxForFees(address, receivedAmount);
               console.log('Sent TRX for fees, txId:', txId);
+              
+              // Update payment status
               await Payment.findOneAndUpdate(
                 { address },
                 { 
@@ -172,6 +172,9 @@ export class PaymentService {
                   }
                 }
               );
+
+              // Only send callback after TRX is sent successfully
+              await this.callbackService.sendPaymentCallback(payment, 'CONFIRMED', receivedAmount);
 
               // After sending TRX, wait a bit and then transfer to main wallet
               await new Promise(resolve => setTimeout(resolve, 3000));
