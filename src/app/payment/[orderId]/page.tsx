@@ -34,6 +34,13 @@ export default function PaymentPage() {
         const response = await fetch(`/api/payment/status?address=${address}&amount=${amount}`);
         const data = await response.json();
         setStatus(data);
+
+        // If payment is confirmed, redirect after 8 seconds
+        if (data.status === 'CONFIRMED') {
+          setTimeout(() => {
+            window.location.href = 'https://test2.bitorbs.com/user/dashboard';
+          }, 8000);
+        }
       } catch (error) {
         console.error('Failed to check status:', error);
       } finally {
@@ -207,6 +214,18 @@ export default function PaymentPage() {
                         <span className="text-yellow-400">{status.remainingAmount} USDT</span>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {status.status === 'CONFIRMED' && (
+                  <div className="text-center mt-6">
+                    <div className="bg-emerald-500/10 text-emerald-400 p-6 rounded-lg mb-4">
+                      <svg className="w-12 h-12 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                      </svg>
+                      <h3 className="text-lg font-semibold mb-2">Payment Successful!</h3>
+                      <p className="text-sm opacity-90">Your payment has been confirmed. Redirecting to dashboard...</p>
+                    </div>
                   </div>
                 )}
               </div>

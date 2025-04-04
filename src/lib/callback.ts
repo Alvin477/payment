@@ -27,7 +27,7 @@ export class CallbackService {
         // Generate signature exactly as Laravel verifies it
         const payloadString = JSON.stringify(payload);
         const signature = crypto
-          .createHmac('sha256', process.env.ADMIN_API_KEY || '')
+          .createHmac('sha256', process.env.ENCRYPTION_KEY || '')
           .update(payloadString)
           .digest('hex');
 
