@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { PaymentService } from '@/lib/payment';
+import { Transaction, TransactionStatus } from '@/types/payment';
 
 const paymentService = new PaymentService();
 
@@ -16,14 +17,22 @@ export async function GET(request: Request) {
       );
     }
 
-    const transaction = await paymentService.checkPayment(
+    // Add timeout to the payment check
+    const timeoutPromise = new Promise<Transaction | null>((_, reject) => {
+      setTimeout(() => reject(new Error('Payment check timed out')), 25000);
+    });
+
+    const transactionPromise = paymentService.checkPayment(
       address,
       parseFloat(expectedAmount)
     );
 
+    const transaction = await Promise.race([transactionPromise, timeoutPromise]);
+
+    // Return pending status if no transaction found
     if (!transaction) {
       return NextResponse.json({
-        status: 'PENDING',
+        status: TransactionStatus.PENDING,
         message: 'No payment received yet',
         expectedAmount: parseFloat(expectedAmount),
         receivedAmount: 0,
@@ -31,24 +40,32 @@ export async function GET(request: Request) {
       });
     }
 
-    const response = {
+    // Return transaction details if found
+    return NextResponse.json({
       status: transaction.status,
       expectedAmount: transaction.expectedAmount,
       receivedAmount: transaction.amount,
       remainingAmount: transaction.remainingAmount,
-      message: transaction.status === 'PARTIAL' 
+      message: transaction.status === TransactionStatus.PARTIAL 
         ? `Partial payment received. Please send remaining ${transaction.remainingAmount} USDT`
-        : transaction.status === 'CONFIRMED'
+        : transaction.status === TransactionStatus.CONFIRMED
         ? 'Payment completed successfully'
         : 'Payment pending'
-    };
-
-    return NextResponse.json(response);
+    });
   } catch (error) {
     console.error('Payment status check failed:', error);
+    
+    // Return a more informative error response
+    const errorMessage = error instanceof Error ? error.message : 'Failed to check payment status';
+    const statusCode = errorMessage.includes('timed out') ? 504 : 500;
+    
     return NextResponse.json(
-      { error: 'Failed to check payment status' },
-      { status: 500 }
+      { 
+        error: errorMessage,
+        status: 'ERROR',
+        message: 'Payment status check failed, please try again'
+      },
+      { status: statusCode }
     );
   }
 } 
