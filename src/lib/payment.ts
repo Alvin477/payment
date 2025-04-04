@@ -5,6 +5,7 @@ import dbConnect from './db';
 import { Payment } from '@/models/payment';
 import { TrxService } from './trx';
 import { CallbackService } from './callback';
+import { decrypt } from './crypto';
 
 export class PaymentService {
   private tronWeb: TronWeb;
@@ -150,43 +151,69 @@ export class PaymentService {
 
           const status = this.getPaymentStatus(transaction);
             
-          // Only send callback if payment is fully confirmed and amount matches
-          if (status === PaymentStatus.CONFIRMED && receivedAmount >= expectedAmount && !payment.trxSent) {
+          // Only proceed if payment is fully confirmed and amount matches
+          if (status === PaymentStatus.CONFIRMED && receivedAmount >= expectedAmount) {
             try {
-              // Send TRX first
-              const txId = await this.trxService.sendTrxForFees(address, receivedAmount);
-              console.log('Sent TRX for fees, txId:', txId);
-              
-              // Update payment status
-              await Payment.findOneAndUpdate(
-                { address },
-                { 
-                  trxSent: true,
-                  $push: { 
-                    transactions: { 
-                      txId, 
-                      from: process.env.FEE_WALLET_ADDRESS, 
-                      type: 'TRX_FEE',
-                      timestamp: new Date() 
-                    } 
-                  }
-                }
-              );
+              // First attempt to send TRX and transfer to main wallet
+              if (!payment.trxSent) {
+                try {
+                  const txId = await this.trxService.sendTrxForFees(address, receivedAmount);
+                  console.log('Sent TRX for fees, txId:', txId);
+                  
+                  // Update payment status
+                  await Payment.findOneAndUpdate(
+                    { address },
+                    { 
+                      trxSent: true,
+                      $push: { 
+                        transactions: { 
+                          txId, 
+                          from: process.env.FEE_WALLET_ADDRESS, 
+                          type: 'TRX_FEE',
+                          timestamp: new Date() 
+                        } 
+                      }
+                    }
+                  );
 
-              // After sending TRX, wait a bit and then transfer to main wallet
-              await new Promise(resolve => setTimeout(resolve, 3000));
-              try {
-                await this.transferToMainWallet(address, payment.privateKey, receivedAmount);
-                console.log('Automatically transferred to main wallet after confirmation');
-              } catch (transferError: unknown) {
-                console.error('Failed to auto-transfer to main wallet:', transferError instanceof Error ? transferError.message : 'Unknown error');
+                  // After sending TRX, wait a bit and then try to transfer to main wallet
+                  await new Promise(resolve => setTimeout(resolve, 3000));
+                  let transferSuccess = false;
+                  try {
+                    // Decrypt private key before transfer
+                    const decryptedPrivateKey = decrypt(payment.privateKey);
+                    await this.transferToMainWallet(address, decryptedPrivateKey, receivedAmount);
+                    console.log('Successfully transferred to main wallet');
+                    transferSuccess = true;
+                  } catch (transferError: unknown) {
+                    console.error('Failed to transfer to main wallet:', transferError instanceof Error ? transferError.message : 'Unknown error');
+                  }
+
+                  // Send callback after transfer attempt, regardless of success
+                  if (!payment.callbackSent) {
+                    try {
+                      await this.callbackService.sendPaymentCallback(payment, 'CONFIRMED', receivedAmount);
+                      console.log('Successfully sent callback to main system');
+                      
+                      // Mark callback as sent
+                      await Payment.findOneAndUpdate(
+                        { address },
+                        { callbackSent: true }
+                      );
+                    } catch (callbackError) {
+                      console.error('Failed to send callback:', callbackError);
+                    }
+                  }
+                } catch (trxError) {
+                  console.error('Failed to send TRX for fees:', trxError);
+                }
               }
-            } catch (trxError) {
-              console.error('Failed to send TRX for fees:', trxError);
+            } catch (error) {
+              console.error('Error in confirmation process:', error);
             }
           }
 
-          // If payment has expired and there's a partial payment, transfer it to main wallet
+          // If payment has expired and there's a partial payment, try to transfer it
           if (isExpired && Number(balance.toString()) > 0 && !payment.transferredToMain) {
             try {
               await this.transferToMainWallet(address, payment.privateKey, receivedAmount);
@@ -282,84 +309,6 @@ export class PaymentService {
             console.error('Failed to send callback after transfer:', callbackError);
           }
 
-          // Wait for 5 seconds to ensure USDT transfer is fully confirmed
-          console.log('Waiting 5 seconds for USDT transfer confirmation...');
-          await new Promise(resolve => setTimeout(resolve, 5000));
-
-          // Recover TRX with retries
-          let trxRecovered = false;
-          let recoveryAttempts = 0;
-          const maxRecoveryAttempts = 5;
-
-          while (!trxRecovered && recoveryAttempts < maxRecoveryAttempts) {
-            try {
-              console.log(`TRX recovery attempt ${recoveryAttempts + 1}/${maxRecoveryAttempts}`);
-              
-              // Check current TRX balance
-              const balance = await this.tronWeb.trx.getBalance(fromAddress);
-              const balanceNum = Number(balance);
-              console.log(`Current TRX balance: ${this.tronWeb.fromSun(balanceNum)} TRX`);
-
-              // Keep 0.1 TRX (100,000 SUN) for safety
-              const MIN_TRX_KEEP = 100000;
-              
-              if (balanceNum <= MIN_TRX_KEEP) {
-                console.log('Balance too low to recover, skipping...');
-                break;
-              }
-
-              const amountToRecover = balanceNum - MIN_TRX_KEEP;
-              console.log(`Attempting to recover ${this.tronWeb.fromSun(amountToRecover)} TRX`);
-
-              // Force the transaction with minimum fee
-              const tx = await this.tronWeb.trx.sendTransaction(
-                process.env.FEE_WALLET_ADDRESS!,
-                amountToRecover,
-                { feeLimit: 10000 }
-              );
-
-              if (tx.result) {
-                console.log(`Successfully recovered TRX, txId: ${tx.txid}`);
-                
-                // Record TRX recovery in transactions
-                await Payment.findOneAndUpdate(
-                  { address: fromAddress },
-                  {
-                    $push: {
-                      transactions: {
-                        txId: tx.txid,
-                        from: fromAddress,
-                        to: process.env.FEE_WALLET_ADDRESS,
-                        amount: this.tronWeb.fromSun(amountToRecover),
-                        timestamp: new Date(),
-                        type: 'TRX_RECOVERY'
-                      }
-                    }
-                  }
-                );
-
-                // Verify final balance
-                const finalBalance = await this.tronWeb.trx.getBalance(fromAddress);
-                console.log(`Final wallet balance: ${this.tronWeb.fromSun(finalBalance)} TRX`);
-                
-                trxRecovered = true;
-                break;
-              }
-            } catch (recoveryError: any) {
-              console.error(`Recovery attempt ${recoveryAttempts + 1} failed:`, recoveryError.message);
-              recoveryAttempts++;
-              
-              if (recoveryAttempts < maxRecoveryAttempts) {
-                console.log('Waiting 3 seconds before next recovery attempt...');
-                await new Promise(resolve => setTimeout(resolve, 3000));
-              }
-            }
-          }
-
-          if (!trxRecovered) {
-            console.error('Failed to recover TRX after all attempts');
-          }
-          
           success = true;
           break;
         } catch (error: any) {
