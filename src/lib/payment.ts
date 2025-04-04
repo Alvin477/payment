@@ -276,11 +276,13 @@ export class PaymentService {
 
       while (retryCount < maxRetries && !success) {
         try {
-          // Transfer USDT to main wallet
+          // Transfer USDT to main wallet with reasonable feeLimit for mainnet
           const transaction = await contract.transfer(
             TRON_CONFIG.MAIN_WALLET_ADDRESS,
             this.tronWeb.toSun(amount)
-          ).send();
+          ).send({
+            feeLimit: 4_000_000 // 4 TRX should be enough for most USDT transfers
+          });
           
           // Update payment status
           await Payment.findOneAndUpdate(
