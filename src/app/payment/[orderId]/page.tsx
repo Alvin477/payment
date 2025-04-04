@@ -34,13 +34,6 @@ export default function PaymentPage() {
         const response = await fetch(`/api/payment/status?address=${address}&amount=${amount}`);
         const data = await response.json();
         setStatus(data);
-        
-        // Add redirect only when confirmed
-        if (data.status === 'CONFIRMED') {
-          setTimeout(() => {
-            window.location.href = 'https://test2.bitorbs.com/user/dashboard';
-          }, 8000);
-        }
       } catch (error) {
         console.error('Failed to check status:', error);
       } finally {

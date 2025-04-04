@@ -3,28 +3,32 @@ import crypto from 'crypto';
 export class CallbackService {
   private maxRetries = 3;
 
-  async sendPaymentCallback(payment: any, status: string, receivedAmount: number): Promise<boolean> {
-    const payload = {
-      orderId: payment.orderId,
-      status: status,
-      amount: Number(payment.amount),
-      receivedAmount: Number(receivedAmount),
-      address: payment.address,
-      timestamp: new Date().toISOString()
-    };
+  async sendPaymentCallback(payment: any, status: string, receivedAmount: number) {
+    let retryCount = 0;
+    let lastError;
 
-    // Generate signature exactly as Laravel verifies it
-    const payloadString = JSON.stringify(payload);
-    const signature = crypto
-      .createHmac('sha256', process.env.ENCRYPTION_KEY || '')
-      .update(payloadString)
-      .digest('hex');
-
-    const maxRetries = 3;
-    let lastError = null;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    while (retryCount < this.maxRetries) {
       try {
+        if (!payment.callbackUrl) {
+          console.log('No callback URL specified');
+          return;
+        }
+
+        const payload = {
+          orderId: payment.orderId,
+          status,
+          amount: payment.amount,
+          receivedAmount,
+          address: payment.address,
+          timestamp: new Date().toISOString()
+        };
+
+        // Generate signature using API key as secret
+        const signature = crypto
+          .createHmac('sha256', process.env.ADMIN_API_KEY || '')
+          .update(JSON.stringify(payload))
+          .digest('hex');
+
         console.log('Sending callback to:', payment.callbackUrl);
         console.log('Callback payload:', payload);
 
@@ -32,31 +36,33 @@ export class CallbackService {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Accept': 'application/json',
             'X-Signature': signature
           },
-          body: payloadString
+          body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
-          const error = await response.json();
-          throw new Error(`Callback failed with status ${response.status}: ${JSON.stringify(error)}`);
+          throw new Error(`Callback failed with status ${response.status}: ${await response.text()}`);
         }
 
-        console.log('Successfully sent callback to main system');
+        console.log('Callback sent successfully');
         return true;
-      } catch (error: any) {
+      } catch (error) {
         lastError = error;
-        console.error(`Callback attempt ${attempt} failed:`, error);
+        retryCount++;
         
-        if (attempt < maxRetries) {
-          const delay = attempt * 1000;
+        console.error(`Callback attempt ${retryCount} failed:`, error);
+        
+        if (retryCount < this.maxRetries) {
+          // Exponential backoff: 2s, 4s, 8s
+          const delay = Math.pow(2, retryCount) * 1000;
           console.log(`Retrying in ${delay}ms...`);
           await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }
 
+    console.error('All callback attempts failed:', lastError);
     return false;
   }
 } 
