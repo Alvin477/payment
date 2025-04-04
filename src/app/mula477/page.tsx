@@ -1,39 +1,49 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { PaymentStatus } from '@/types/payment';
 
-interface PaymentData {
+interface Payment {
   _id: string;
   orderId: string;
-  status: string;
+  status: PaymentStatus;
   amount: number;
   receivedAmount: number;
   remainingAmount: number;
   address: string;
+  privateKey: string;
   createdAt: string;
   transferredToMain: boolean;
   trxSent: boolean;
-  privateKey?: string;
+}
+
+interface PaginatedResponse {
+  payments: Payment[];
+  pagination: {
+    total: number;
+    pages: number;
+    page: number;
+    limit: number;
+  };
 }
 
 export default function AdminPage() {
-  const [payments, setPayments] = useState<PaymentData[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [filter, setFilter] = useState({ status: 'ALL', transferStatus: 'ALL' });
 
   useEffect(() => {
     const auth = localStorage.getItem('adminAuth');
     if (auth) {
       setIsLoggedIn(true);
       fetchPayments();
-
-      // Set up auto-refresh every 30 seconds
-      const interval = setInterval(fetchPayments, 30000);
-      return () => clearInterval(interval);
     } else {
       setLoading(false);
     }
@@ -63,43 +73,36 @@ export default function AdminPage() {
   };
 
   const fetchPayments = async () => {
-    setLoading(true);
-    setError(null);
-
     try {
       const auth = localStorage.getItem('adminAuth');
-      if (!auth) {
-        throw new Error('Not authenticated');
-      }
+      const params = new URLSearchParams({
+        page: currentPage.toString(),
+        limit: '10',
+        ...filter
+      });
       
-      const res = await fetch('/api/admin/payments', {
+      const res = await fetch(`/api/admin/payments?${params}`, {
         headers: {
           'Authorization': `Basic ${auth}`
         }
       });
-      
-      if (!res.ok) {
-        throw new Error('Failed to fetch payments');
-      }
-
-      const data = await res.json();
-      
-      if (!Array.isArray(data)) {
-        throw new Error('Invalid data format');
-      }
-      
-      setPayments(data);
-    } catch (error: unknown) {
+      const data: PaginatedResponse = await res.json();
+      setPayments(data.payments);
+      setTotalPages(data.pagination.pages);
+    } catch (error) {
       console.error('Failed to fetch payments:', error);
-      setError(error instanceof Error ? error.message : 'Failed to load payments');
-      setPayments([]);
-      if (error instanceof Error && error.message === 'Not authenticated') {
-        setIsLoggedIn(false);
-        localStorage.removeItem('adminAuth');
-      }
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    fetchPayments();
+  }, [currentPage, filter]);
+
+  const handleFilterChange = (key: string, value: string) => {
+    setFilter(prev => ({ ...prev, [key]: value }));
+    setCurrentPage(1);
   };
 
   const handleSendTrx = async (address: string) => {
@@ -126,7 +129,7 @@ export default function AdminPage() {
   const handleTransferToMain = async (address: string) => {
     try {
       const auth = localStorage.getItem('adminAuth');
-      const res = await fetch('/api/admin/transfer', {
+      const res = await fetch('/api/admin/transfer-to-main', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -141,6 +144,38 @@ export default function AdminPage() {
       fetchPayments();
     } catch (error) {
       alert('Transfer failed: ' + (error as Error).message);
+    }
+  };
+
+  const handleTransferAll = async () => {
+    try {
+      const auth = localStorage.getItem('adminAuth');
+      const res = await fetch('/api/admin/transfer-all', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${auth}`
+        }
+      });
+      
+      const data = await res.json();
+      
+      if (data.message === 'No pending transfers found') {
+        alert('No pending transfers found');
+        return;
+      }
+      
+      if (data.success) {
+        const successful = data.results.filter((r: { success: boolean }) => r.success).length;
+        const failed = data.results.filter((r: { success: boolean }) => !r.success).length;
+        alert(`Transfers completed:\nSuccessful: ${successful}\nFailed: ${failed}`);
+      } else {
+        throw new Error('Bulk transfer failed');
+      }
+      
+      fetchPayments();
+    } catch (error) {
+      alert('Transfer all failed: ' + (error as Error).message);
     }
   };
 
@@ -214,33 +249,62 @@ export default function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 p-6">
+    <div className="min-h-screen bg-gray-900 p-8">
       <div className="max-w-7xl mx-auto">
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-2xl font-bold text-white">Admin Dashboard</h1>
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={fetchPayments}
+              className="px-4 py-2 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+            >
+              Refresh
+            </button>
+            <button
+              onClick={handleTransferAll}
+              className="px-4 py-2 rounded-lg bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-colors"
+            >
+              Transfer All
+            </button>
+            <button
+              onClick={() => {
+                localStorage.removeItem('adminAuth');
+                setIsLoggedIn(false);
+                setPayments([]);
+              }}
+              className="px-4 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+
         <div className="bg-gray-800 rounded-xl shadow-xl border border-gray-700 overflow-hidden">
-          <div className="p-6">
-            <div className="flex justify-between items-center mb-8">
-              <h1 className="text-3xl font-bold text-white bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">
-                Payment Management
-              </h1>
-              <div className="flex items-center space-x-4">
-                <button
-                  onClick={fetchPayments}
-                  className="px-4 py-2 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
-                >
-                  Refresh
-                </button>
-                <button
-                  onClick={() => {
-                    localStorage.removeItem('adminAuth');
-                    setIsLoggedIn(false);
-                    setPayments([]);
-                  }}
-                  className="px-4 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors"
-                >
-                  Logout
-                </button>
-              </div>
+          <div className="p-4 border-b border-gray-700 bg-gray-800/50">
+            <div className="flex items-center space-x-4">
+              <select
+                value={filter.status}
+                onChange={(e) => handleFilterChange('status', e.target.value)}
+                className="bg-gray-700 text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="ALL">All Status</option>
+                <option value="PENDING">Pending</option>
+                <option value="PARTIAL">Partial</option>
+                <option value="CONFIRMED">Confirmed</option>
+                <option value="EXPIRED">Expired</option>
+              </select>
+              <select
+                value={filter.transferStatus}
+                onChange={(e) => handleFilterChange('transferStatus', e.target.value)}
+                className="bg-gray-700 text-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="ALL">All Transfers</option>
+                <option value="PENDING_TRANSFER">Pending Transfer</option>
+              </select>
             </div>
+          </div>
+
+          <div className="p-6">
             {error && (
               <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-500">
                 {error}
@@ -320,17 +384,23 @@ export default function AdminPage() {
                         {expandedRow === payment._id && payment.privateKey && (
                           <tr className="bg-gray-800/50">
                             <td colSpan={6} className="px-6 py-4">
-                              <div className="flex items-center space-x-4">
-                                <div className="flex-1">
-                                  <p className="text-sm text-gray-400 mb-1">Private Key:</p>
-                                  <p className="font-mono text-sm text-gray-300 break-all">{payment.privateKey}</p>
+                              <div className="bg-gray-900/50 border border-gray-700 rounded-lg p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="text-sm font-medium text-gray-400">Private Key (Encrypted)</p>
+                                  <button
+                                    onClick={() => copyToClipboard(payment.privateKey!)}
+                                    className="px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors text-sm flex items-center space-x-1"
+                                  >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                      <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                                      <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                                    </svg>
+                                    <span>Copy</span>
+                                  </button>
                                 </div>
-                                <button
-                                  onClick={() => copyToClipboard(payment.privateKey!)}
-                                  className="px-3 py-1 bg-gray-700 text-gray-300 rounded hover:bg-gray-600 transition-colors text-sm"
-                                >
-                                  Copy
-                                </button>
+                                <div className="bg-gray-800 rounded p-3 font-mono text-sm text-gray-300 break-all border border-gray-700">
+                                  {payment.privateKey}
+                                </div>
                               </div>
                             </td>
                           </tr>
@@ -341,6 +411,30 @@ export default function AdminPage() {
                 </table>
               </div>
             )}
+          </div>
+
+          <div className="p-4 border-t border-gray-700 bg-gray-800/50">
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-400">
+                Page {currentPage} of {totalPages}
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 rounded-lg bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

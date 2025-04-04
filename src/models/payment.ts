@@ -37,7 +37,6 @@ const paymentSchema = new mongoose.Schema({
     type: String,
     required: true,
     set: (value: string) => encrypt(value),
-    get: (value: string) => value ? decrypt(value) : value,
   },
   createdAt: {
     type: Date,
