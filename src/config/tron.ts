@@ -1,10 +1,10 @@
 export const TRON_CONFIG = {
-  // TRON Nile Testnet settings
-  NETWORK: 'nile' as 'mainnet' | 'nile',
-  API_URL: 'https://nile.trongrid.io',
+  // TRON Mainnet settings
+  NETWORK: 'mainnet' as 'mainnet' | 'nile',
+  API_URL: 'https://api.trongrid.io',
   
-  // USDT Contract on Nile Testnet
-  USDT_CONTRACT: 'TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf', // Updated to correct Nile testnet USDT address
+  // USDT Contract on Mainnet
+  USDT_CONTRACT: 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t', // Mainnet USDT contract address
   
   // Main wallet will be set later
   MAIN_WALLET_ADDRESS: process.env.MAIN_WALLET_ADDRESS || '',
