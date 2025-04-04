@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { TRON_CONFIG } from '@/config/tron';
 import { QRCodeSVG } from 'qrcode.react';
+import Image from 'next/image';
 
 interface PaymentStatus {
   status: string;
@@ -102,6 +103,32 @@ export default function PaymentPage() {
     );
   }
 
+  // If payment is confirmed, show only the success message
+  if (status?.status === 'CONFIRMED') {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-gray-800 rounded-2xl p-8 text-center border border-gray-700 shadow-xl">
+          <div className="mb-8">
+            <Image
+              src="/success.gif"
+              alt="Success"
+              width={200}
+              height={200}
+              className="mx-auto"
+              priority
+            />
+          </div>
+          <div className="space-y-4">
+            <h2 className="text-3xl font-bold text-emerald-400">Payment Successful!</h2>
+            <p className="text-gray-300 text-lg">Your payment has been confirmed</p>
+            <p className="text-gray-500">Redirecting to dashboard...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show the regular payment form for all other states
   return (
     <div className="min-h-screen bg-gray-900 px-4 py-8 flex flex-col justify-center">
       <div className="w-full max-w-md mx-auto">
@@ -214,18 +241,6 @@ export default function PaymentPage() {
                         <span className="text-yellow-400">{status.remainingAmount} USDT</span>
                       </div>
                     )}
-                  </div>
-                )}
-
-                {status.status === 'CONFIRMED' && (
-                  <div className="text-center mt-6">
-                    <div className="bg-emerald-500/10 text-emerald-400 p-6 rounded-lg mb-4">
-                      <svg className="w-12 h-12 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
-                      </svg>
-                      <h3 className="text-lg font-semibold mb-2">Payment Successful!</h3>
-                      <p className="text-sm opacity-90">Your payment has been confirmed. Redirecting to dashboard...</p>
-                    </div>
                   </div>
                 )}
               </div>
