@@ -61,6 +61,7 @@ export default function AdminPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [filter, setFilter] = useState({ status: 'ALL', transferStatus: 'ALL' });
+  const [copyNotification, setCopyNotification] = useState<string | null>(null);
 
   useEffect(() => {
     const auth = localStorage.getItem('adminAuth');
@@ -205,9 +206,12 @@ export default function AdminPage() {
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
-      alert('Copied to clipboard!');
+      setCopyNotification('Address copied to clipboard!');
+      setTimeout(() => setCopyNotification(null), 2000);
     } catch (err) {
       console.error('Failed to copy:', err);
+      setCopyNotification('Failed to copy address');
+      setTimeout(() => setCopyNotification(null), 2000);
     }
   };
 
@@ -259,6 +263,13 @@ export default function AdminPage() {
   return (
     <div className="min-h-screen bg-gray-900 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
+        {/* Notification */}
+        {copyNotification && (
+          <div className="fixed bottom-4 right-4 px-4 py-2 bg-gray-800 text-gray-300 rounded-lg shadow-lg border border-gray-700 animate-fade-in">
+            {copyNotification}
+          </div>
+        )}
+        
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <h1 className="text-xl md:text-2xl font-bold text-white">Admin Dashboard</h1>
           <div className="flex flex-wrap items-center gap-3">
@@ -345,8 +356,16 @@ export default function AdminPage() {
                         )}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm hidden lg:table-cell">
-                        <div className="font-mono text-gray-400 truncate max-w-[200px]">
+                        <div 
+                          onClick={() => copyToClipboard(payment.address)}
+                          className="font-mono text-gray-400 truncate max-w-[200px] cursor-pointer hover:text-gray-300 transition-colors group flex items-center gap-2"
+                          title="Click to copy"
+                        >
                           {payment.address}
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                            <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                          </svg>
                         </div>
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm">
@@ -374,8 +393,15 @@ export default function AdminPage() {
                           <div className="space-y-3">
                             <div className="lg:hidden">
                               <div className="text-xs font-medium text-gray-400 mb-1">Address</div>
-                              <div className="font-mono text-gray-300 break-all text-sm">
+                              <div 
+                                onClick={() => copyToClipboard(payment.address)}
+                                className="font-mono text-gray-300 break-all text-sm cursor-pointer hover:text-gray-100 transition-colors group flex items-center gap-2"
+                              >
                                 {payment.address}
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 20 20" fill="currentColor">
+                                  <path d="M8 3a1 1 0 011-1h2a1 1 0 110 2H9a1 1 0 01-1-1z" />
+                                  <path d="M6 3a2 2 0 00-2 2v11a2 2 0 002 2h8a2 2 0 002-2V5a2 2 0 00-2-2 3 3 0 01-3 3H9a3 3 0 01-3-3z" />
+                                </svg>
                               </div>
                             </div>
                             <div>

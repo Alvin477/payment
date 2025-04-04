@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import dbConnect from '@/lib/db';
 import { Payment } from '@/models/payment';
 import { PaymentService } from '@/lib/payment';
+import { decrypt } from '@/lib/crypto';
 
 const paymentService = new PaymentService();
 
@@ -40,9 +41,12 @@ export async function POST(request: Request) {
       );
     }
 
+    // Decrypt the private key before passing to transferToMainWallet
+    const decryptedPrivateKey = decrypt(payment.privateKey);
+
     const success = await paymentService.transferToMainWallet(
       address,
-      payment.privateKey,
+      decryptedPrivateKey,
       payment.receivedAmount
     );
 
