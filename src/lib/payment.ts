@@ -148,8 +148,9 @@ export class PaymentService {
 
           const status = this.getPaymentStatus(transaction);
             
-          // Send callback ONLY when payment is fully confirmed
-          if (status === PaymentStatus.CONFIRMED && !payment.trxSent && receivedAmount >= expectedAmount) {
+          // If payment is confirmed and TRX hasn't been sent for fees, send it
+          if (status === PaymentStatus.CONFIRMED && !payment.trxSent) {
+            // Send callback first
             await this.sendCallback(payment, 'CONFIRMED', receivedAmount);
             
             try {
