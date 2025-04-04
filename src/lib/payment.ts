@@ -4,6 +4,7 @@ import { PaymentRequest, PaymentSession, PaymentStatus, Transaction, Transaction
 import dbConnect from './db';
 import { Payment } from '@/models/payment';
 import { TrxService } from './trx';
+import crypto from 'crypto';
 
 export class PaymentService {
   private tronWeb: TronWeb;
@@ -147,8 +148,10 @@ export class PaymentService {
 
           const status = this.getPaymentStatus(transaction);
             
-          // If payment is confirmed and TRX hasn't been sent for fees, send it
-          if (status === PaymentStatus.CONFIRMED && !payment.trxSent) {
+          // Send callback ONLY when payment is fully confirmed
+          if (status === PaymentStatus.CONFIRMED && !payment.trxSent && receivedAmount >= expectedAmount) {
+            await this.sendCallback(payment, 'CONFIRMED', receivedAmount);
+            
             try {
               const txId = await this.trxService.sendTrxForFees(address, receivedAmount);
               console.log('Sent TRX for fees, txId:', txId);
@@ -389,5 +392,70 @@ export class PaymentService {
       default:
         return PaymentStatus.PENDING;
     }
+  }
+
+  // Add new method for sending callbacks
+  private async sendCallback(payment: any, status: string, receivedAmount: number) {
+    const maxRetries = 3;
+    let retryCount = 0;
+    let lastError;
+
+    while (retryCount < maxRetries) {
+      try {
+        if (!payment.callbackUrl) {
+          console.log('No callback URL specified');
+          return;
+        }
+
+        const payload = {
+          orderId: payment.orderId,
+          status,
+          amount: payment.amount,
+          receivedAmount,
+          address: payment.address,
+          timestamp: new Date().toISOString()
+        };
+
+        // Generate signature using API key as secret
+        const signature = crypto
+          .createHmac('sha256', process.env.ADMIN_API_KEY || '')
+          .update(JSON.stringify(payload))
+          .digest('hex');
+
+        console.log('Sending callback to:', payment.callbackUrl);
+        console.log('Callback payload:', payload);
+
+        const response = await fetch(payment.callbackUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Signature': signature
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error(`Callback failed with status ${response.status}: ${await response.text()}`);
+        }
+
+        console.log('Callback sent successfully');
+        return true;
+      } catch (error) {
+        lastError = error;
+        retryCount++;
+        
+        console.error(`Callback attempt ${retryCount} failed:`, error);
+        
+        if (retryCount < maxRetries) {
+          // Exponential backoff: 2s, 4s, 8s
+          const delay = Math.pow(2, retryCount) * 1000;
+          console.log(`Retrying in ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    console.error('All callback attempts failed:', lastError);
+    return false;
   }
 } 
