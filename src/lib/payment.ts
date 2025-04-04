@@ -116,13 +116,29 @@ export class PaymentService {
         let lastError: Error | null = null;
         for (let i = 0; i < 3; i++) {
           try {
+            // Reset TronWeb instance before each try
+            this.tronWeb = new TronWeb({
+              fullHost: TRON_CONFIG.API_URL,
+              headers: { "TRON-PRO-API-KEY": TRON_CONFIG.API_KEY }
+            });
+            this.tronWeb.setAddress(address);
+            
+            const contract = await this.tronWeb.contract().at(TRON_CONFIG.USDT_CONTRACT);
+            console.log('Contract initialized, attempt:', i + 1);
+            
             balance = await contract.balanceOf(address).call();
             console.log('Raw balance response:', balance?.toString());
-            break;
+            
+            if (balance) {
+              break;
+            } else {
+              throw new Error('Balance response was empty');
+            }
           } catch (err) {
             lastError = err as Error;
             console.error(`Attempt ${i + 1} failed:`, err);
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Longer delay between retries on Vercel
+            await new Promise(resolve => setTimeout(resolve, 2000));
           }
         }
         
